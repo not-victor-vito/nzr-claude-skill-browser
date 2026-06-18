@@ -19,7 +19,7 @@ jobs:
       - name: Install and build frontend
         run: |
           npm install
-          npm run build
+          npx vite build
 
       - name: Install API dependencies
         run: |
