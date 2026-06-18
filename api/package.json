@@ -1,10 +1,10 @@
 {
   "name": "skill-browser-api",
   "version": "1.0.0",
-  "description": "Azure Functions API for Skill Browser",
-  "main": "index.js",
+  "main": "src/functions/skills.js",
   "dependencies": {
     "@azure/cosmos": "^4.1.0",
-    "uuid": "^9.0.1"
+    "@azure/functions": "^4.6.0",
+    "uuid": "^11.0.0"
   }
 }
