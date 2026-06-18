@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useMsal } from '@azure/msal-react'
+import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import SkillCard from './components/SkillCard.jsx'
 import SkillModal from './components/SkillModal.jsx'
 import SubmitSkillForm from './components/SubmitSkillForm.jsx'
+import { apiScope } from './authConfig.js'
 import styles from './App.module.css'
 
 const CATEGORIES = ['All', 'Drafting', 'Analysis', 'Summarising', 'Meetings', 'Email', 'Data']
@@ -15,7 +18,12 @@ const CATEGORY_ICONS = {
   Data: '🗄️',
 }
 
+// In production VITE_API_BASE_URL points to the standalone Functions app.
+// In dev, it's unset and Vite proxies /api → localhost:7071.
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+
 export default function App() {
+  const { instance, accounts } = useMsal()
   const [skills, setSkills] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -25,11 +33,30 @@ export default function App() {
   const [showSubmitForm, setShowSubmitForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
+  async function getToken() {
+    try {
+      const result = await instance.acquireTokenSilent({
+        scopes: [apiScope],
+        account: accounts[0],
+      })
+      return result.accessToken
+    } catch (err) {
+      if (err instanceof InteractionRequiredAuthError) {
+        const result = await instance.acquireTokenPopup({ scopes: [apiScope] })
+        return result.accessToken
+      }
+      throw err
+    }
+  }
+
   const fetchSkills = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch('/api/skills')
+      const token = await getToken()
+      const res = await fetch(`${API_BASE}/skills`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
       if (!res.ok) throw new Error(`Failed to load skills (${res.status})`)
       const data = await res.json()
       setSkills(data)
@@ -38,7 +65,7 @@ export default function App() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchSkills()
@@ -56,7 +83,6 @@ export default function App() {
     return matchesCategory && matchesSearch
   })
 
-  // Stats
   const totalSkills = skills.length
   const mostUsed = skills.length
     ? skills.reduce((a, b) => (b.use_count > a.use_count ? b : a), skills[0])
@@ -66,9 +92,13 @@ export default function App() {
   async function handleSubmit(formData) {
     setSubmitting(true)
     try {
-      const res = await fetch('/api/skills', {
+      const token = await getToken()
+      const res = await fetch(`${API_BASE}/skills`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(formData),
       })
       if (!res.ok) {
@@ -86,12 +116,17 @@ export default function App() {
 
   async function handleCopy(skill) {
     await navigator.clipboard.writeText(skill.prompt)
-    // increment use_count optimistically
     setSkills((prev) =>
       prev.map((s) => (s.id === skill.id ? { ...s, use_count: (s.use_count || 0) + 1 } : s))
     )
-    // fire-and-forget to API
-    fetch(`/api/skills/${skill.id}/use`, { method: 'POST' }).catch(() => {})
+    getToken()
+      .then((token) =>
+        fetch(`${API_BASE}/skills/${skill.id}/use`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      )
+      .catch(() => {})
   }
 
   return (
@@ -121,7 +156,6 @@ export default function App() {
       </header>
 
       <main className={styles.main}>
-        {/* Stats row */}
         <div className={styles.stats}>
           <div className={styles.statCard}>
             <div className={styles.statLabel}>Skills</div>
@@ -137,7 +171,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Category tabs */}
         <div className={styles.tabs}>
           {CATEGORIES.map((cat) => (
             <button
@@ -150,7 +183,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* Grid */}
         {loading && <div className={styles.message}>Loading skills…</div>}
         {error && (
           <div className={styles.error}>

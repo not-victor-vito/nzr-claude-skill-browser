@@ -1,4 +1,4 @@
-name: Deploy to Azure Static Web Apps
+name: Deploy
 
 on:
   push:
@@ -6,28 +6,60 @@ on:
       - main
 
 jobs:
-  deploy:
+  # ── Job 1: Deploy React app to GitHub Pages ──────────────────────────────
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+        env:
+          # Set in GitHub → Settings → Secrets and variables → Actions
+          # Value: https://<your-function-app>.azurewebsites.net/api
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
+
+  # ── Job 2: Deploy Azure Functions API ────────────────────────────────────
+  deploy-api:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install and build frontend
-        run: |
-          npm install
-          npx vite build
+      - name: Install API dependencies
+        run: npm install --omit=dev
+        working-directory: api
 
-      - name: Deploy to Azure Static Web Apps
-        uses: Azure/static-web-apps-deploy@v1
+      - name: Deploy to Azure Functions
+        uses: Azure/functions-action@v1
         with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_YELLOW_FLOWER_088B51900 }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          action: upload
-          app_location: /
-          api_location: api
-          app_artifact_location: dist
-          skip_app_build: true
+          # Set in GitHub → Settings → Secrets and variables → Actions
+          app-name: ${{ secrets.AZURE_FUNCTIONAPP_NAME }}
+          package: api
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
