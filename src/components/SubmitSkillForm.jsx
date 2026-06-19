@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { parseSkillFile } from '../parseSkillFile.js'
 import styles from './SubmitSkillForm.module.css'
 
 const INITIAL = {
@@ -12,6 +13,9 @@ const INITIAL = {
 export default function SubmitSkillForm({ onClose, onSubmit, submitting, categories }) {
   const [form, setForm] = useState(INITIAL)
   const [error, setError] = useState(null)
+  const [importNotice, setImportNotice] = useState(null)
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     function handler(e) {
@@ -23,6 +27,32 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, categor
 
   function set(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  async function handleFileChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = '' // reset so the same file can be re-selected
+
+    setImporting(true)
+    setError(null)
+    setImportNotice(null)
+
+    try {
+      const parsed = await parseSkillFile(file)
+      setForm((prev) => ({
+        ...prev,
+        title: parsed.title || prev.title,
+        description: parsed.description || prev.description,
+        prompt: parsed.prompt || prev.prompt,
+        // leave category and tags for the user to fill in
+      }))
+      setImportNotice(`Imported from ${file.name} — select a category and submit.`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setImporting(false)
+    }
   }
 
   async function handleSubmit(e) {
@@ -57,6 +87,28 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, categor
             ✕
           </button>
         </div>
+
+        {/* .skill file import */}
+        <div className={styles.importRow}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".skill"
+            className={styles.fileInputHidden}
+            onChange={handleFileChange}
+          />
+          <button
+            type="button"
+            className={styles.importBtn}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing || submitting}
+          >
+            {importing ? 'Importing…' : '↑ Import from .skill file'}
+          </button>
+          <span className={styles.importHint}>or fill in manually below</span>
+        </div>
+
+        {importNotice && <div className={styles.notice}>{importNotice}</div>}
 
         <form onSubmit={handleSubmit} className={styles.form} noValidate>
           <label className={styles.label}>
