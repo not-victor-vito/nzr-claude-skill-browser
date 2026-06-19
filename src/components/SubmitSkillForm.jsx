@@ -152,7 +152,7 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
           <input
             ref={fileInputRef}
             type="file"
-            accept=".skill"
+            accept=".skill,.zip"
             className={styles.fileInputHidden}
             onChange={handleFileChange}
           />
