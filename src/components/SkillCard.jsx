@@ -38,7 +38,6 @@ export default function SkillCard({ skill, icon, onPreview, onCopy }) {
       <p className={styles.description}>{skill.description}</p>
 
       <div className={styles.meta}>
-        <span className={styles.category}>{skill.category}</span>
         <span className={styles.useCount}>
           <span className={styles.bolt}>⚡</span>
           {skill.use_count ?? 0}
@@ -50,7 +49,7 @@ export default function SkillCard({ skill, icon, onPreview, onCopy }) {
           <span>⎘</span> Copy
         </button>
         <button className={styles.btnSecondary} onClick={onPreview}>
-          Preview
+          More info
         </button>
       </div>
     </div>
