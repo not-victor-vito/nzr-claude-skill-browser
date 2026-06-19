@@ -177,7 +177,7 @@ export default function App() {
               <SkillCard
                 key={skill.id}
                 skill={skill}
-                icon="📝"
+                icon={skill.icon || '📝'}
                 onPreview={() => setSelectedSkill(skill)}
                 onCopy={() => handleCopy(skill)}
               />

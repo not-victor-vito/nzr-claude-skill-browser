@@ -73,7 +73,7 @@ app.http('PostSkill', {
       return json({ error: 'Request body must be JSON.' }, 400)
     }
 
-    const { title, category, description, prompt, tags } = body
+    const { title, icon, category, description, prompt, tags } = body
 
     if (!title || typeof title !== 'string' || !title.trim())
       return json({ error: 'title is required.' }, 400)
@@ -85,6 +85,7 @@ app.http('PostSkill', {
     const item = {
       id: uuidv4(),
       title: title.trim().slice(0, 100),
+      icon: typeof icon === 'string' ? icon.trim().slice(0, 8) : '📝',
       description: (description || '').toString().trim().slice(0, 200),
       prompt: prompt.trim(),
       tags: Array.isArray(tags) ? tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 10) : [],

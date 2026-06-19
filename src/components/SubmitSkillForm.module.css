@@ -164,6 +164,40 @@
   cursor: not-allowed;
 }
 
+/* Emoji picker */
+.emojiGrid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.emojiBtn {
+  background: #fafaf9;
+  border: 1px solid #e7e5e4;
+  border-radius: 6px;
+  font-size: 18px;
+  line-height: 1;
+  padding: 5px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emojiBtn:hover {
+  background: #f0f0ff;
+  border-color: #a3a0fb;
+}
+
+.emojiBtnActive {
+  background: #ededff;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px #c7d2fe;
+}
+
 /* .skill import row */
 .importRow {
   display: flex;

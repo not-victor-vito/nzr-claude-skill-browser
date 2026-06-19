@@ -2,9 +2,16 @@ import { useState, useEffect, useRef } from 'react'
 import { parseSkillFile } from '../parseSkillFile.js'
 import styles from './SubmitSkillForm.module.css'
 
+const EMOJIS = [
+  '📝','✏️','📄','📊','📈','📋','📌','🗂️',
+  '💡','🔍','✅','🎯','⚡','🚀','💬','📧',
+  '📅','🤝','👥','🏆','🎨','💻','🔧','🌐',
+  '📢','🔐','⚙️','🧠','📦','🛠️','🗣️','🧩',
+]
+
 const INITIAL = {
   title: '',
-  category: '',
+  icon: '📝',
   description: '',
   prompt: '',
   tags: '',
@@ -65,6 +72,7 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting }) {
     try {
       await onSubmit({
         title: form.title.trim(),
+        icon: form.icon,
         description: form.description.trim(),
         prompt: form.prompt.trim(),
         tags: form.tags
@@ -122,6 +130,23 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting }) {
               required
             />
           </label>
+
+          <div className={styles.label}>
+            Icon
+            <div className={styles.emojiGrid}>
+              {EMOJIS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  className={`${styles.emojiBtn} ${form.icon === e ? styles.emojiBtnActive : ''}`}
+                  onClick={() => set('icon', e)}
+                  aria-label={e}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <label className={styles.label}>
             Description
