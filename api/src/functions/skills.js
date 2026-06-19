@@ -1,6 +1,11 @@
 const { app } = require('@azure/functions')
 const { getContainer } = require('../../shared/cosmos')
 const { v4: uuidv4 } = require('uuid')
+const {
+  StorageSharedKeyCredential,
+  generateBlobSASQueryParameters,
+  BlobSASPermissions,
+} = require('@azure/storage-blob')
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -73,7 +78,7 @@ app.http('PostSkill', {
       return json({ error: 'Request body must be JSON.' }, 400)
     }
 
-    const { title, icon, category, description, prompt, tags } = body
+    const { title, icon, category, description, prompt, tags, assets } = body
 
     if (!title || typeof title !== 'string' || !title.trim())
       return json({ error: 'title is required.' }, 400)
@@ -89,6 +94,11 @@ app.http('PostSkill', {
       description: (description || '').toString().trim().slice(0, 200),
       prompt: prompt.trim(),
       tags: Array.isArray(tags) ? tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 10) : [],
+      assets: Array.isArray(assets)
+        ? assets
+            .filter((a) => a && typeof a.name === 'string' && typeof a.url === 'string')
+            .slice(0, 50)
+        : [],
       submitted_by: submittedBy,
       submitted_at: new Date().toISOString(),
       use_count: 0,
@@ -135,6 +145,62 @@ app.http('IncrementUseCount', {
     } catch (err) {
       context.warn('IncrementUseCount error:', err.message)
       return json({ error: 'Could not increment use count.' }, 500)
+    }
+  },
+})
+
+// POST /api/upload-url
+// Returns a short-lived SAS URL for direct browser-to-blob upload.
+app.http('GetUploadUrl', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'upload-url',
+  handler: async (request, context) => {
+    const accountName = process.env.STORAGE_ACCOUNT_NAME
+    const accountKey = process.env.STORAGE_ACCOUNT_KEY
+    const containerName = process.env.STORAGE_CONTAINER || 'skill-assets'
+
+    if (!accountName || !accountKey) {
+      context.error('Storage env vars not configured')
+      return json({ error: 'Asset storage is not configured.' }, 503)
+    }
+
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return json({ error: 'Request body must be JSON.' }, 400)
+    }
+
+    const { filename, contentType } = body
+    if (!filename || typeof filename !== 'string') {
+      return json({ error: 'filename is required.' }, 400)
+    }
+
+    const safeName = filename.replace(/\.\./g, '').replace(/^\/+/, '').slice(0, 300)
+    const blobPath = `${uuidv4()}/${safeName}`
+
+    try {
+      const credential = new StorageSharedKeyCredential(accountName, accountKey)
+      const sasToken = generateBlobSASQueryParameters(
+        {
+          containerName,
+          blobName: blobPath,
+          permissions: BlobSASPermissions.parse('cw'),
+          startsOn: new Date(),
+          expiresOn: new Date(Date.now() + 15 * 60 * 1000),
+          contentType: contentType || 'application/octet-stream',
+        },
+        credential,
+      ).toString()
+
+      const sasUrl = `https://${accountName}.blob.core.windows.net/${containerName}/${blobPath}?${sasToken}`
+      const blobUrl = `https://${accountName}.blob.core.windows.net/${containerName}/${blobPath}`
+
+      return json({ sasUrl, blobUrl })
+    } catch (err) {
+      context.error('GetUploadUrl error:', err.message)
+      return json({ error: 'Could not generate upload URL.' }, 500)
     }
   },
 })

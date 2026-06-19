@@ -17,11 +17,12 @@ const INITIAL = {
   tags: '',
 }
 
-export default function SubmitSkillForm({ onClose, onSubmit, submitting }) {
+export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToken, apiBase }) {
   const [form, setForm] = useState(INITIAL)
   const [error, setError] = useState(null)
   const [importNotice, setImportNotice] = useState(null)
   const [importing, setImporting] = useState(false)
+  const [pendingAssets, setPendingAssets] = useState([]) // [{ name, data: Uint8Array, contentType }]
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -39,11 +40,12 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting }) {
   async function handleFileChange(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    e.target.value = '' // reset so the same file can be re-selected
+    e.target.value = ''
 
     setImporting(true)
     setError(null)
     setImportNotice(null)
+    setPendingAssets([])
 
     try {
       const parsed = await parseSkillFile(file)
@@ -52,14 +54,48 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting }) {
         title: parsed.title || prev.title,
         description: parsed.description || prev.description,
         prompt: parsed.prompt || prev.prompt,
-        // leave category and tags for the user to fill in
       }))
-      setImportNotice(`Imported from ${file.name} — review the details and submit.`)
+      setPendingAssets(parsed.assets || [])
+      const assetCount = parsed.assets?.length || 0
+      const assetNote = assetCount > 0 ? ` (${assetCount} asset${assetCount !== 1 ? 's' : ''} will be uploaded)` : ''
+      setImportNotice(`Imported from ${file.name}${assetNote} — review the details and submit.`)
     } catch (err) {
       setError(err.message)
     } finally {
       setImporting(false)
     }
+  }
+
+  /**
+   * Upload a single asset via SAS token. Returns { name, url }.
+   */
+  async function uploadAsset(asset, token) {
+    const res = await fetch(`${apiBase}/upload-url`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ filename: asset.name, contentType: asset.contentType }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || `Upload URL request failed (${res.status})`)
+    }
+    const { sasUrl, blobUrl } = await res.json()
+
+    // PUT directly to blob storage using the SAS URL
+    const put = await fetch(sasUrl, {
+      method: 'PUT',
+      headers: {
+        'x-ms-blob-type': 'BlockBlob',
+        'Content-Type': asset.contentType,
+      },
+      body: asset.data,
+    })
+    if (!put.ok) throw new Error(`Asset upload failed for ${asset.name} (${put.status})`)
+
+    return { name: asset.name, url: blobUrl }
   }
 
   async function handleSubmit(e) {
@@ -69,7 +105,22 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting }) {
       setError('Title and prompt are required.')
       return
     }
+
     try {
+      // Upload any pending assets before submitting the skill
+      let uploadedAssets = []
+      if (pendingAssets.length > 0) {
+        const token = await getToken()
+        const results = await Promise.allSettled(
+          pendingAssets.map((a) => uploadAsset(a, token)),
+        )
+        const failed = results.filter((r) => r.status === 'rejected')
+        if (failed.length > 0) {
+          throw new Error(`${failed.length} asset(s) failed to upload: ${failed[0].reason?.message}`)
+        }
+        uploadedAssets = results.map((r) => r.value)
+      }
+
       await onSubmit({
         title: form.title.trim(),
         icon: form.icon,
@@ -79,6 +130,7 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting }) {
           .split(',')
           .map((t) => t.trim())
           .filter(Boolean),
+        assets: uploadedAssets,
       })
     } catch (err) {
       setError(err.message)
@@ -189,8 +241,12 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting }) {
             <button type="button" className={styles.btnCancel} onClick={onClose} disabled={submitting}>
               Cancel
             </button>
-            <button type="submit" className={styles.btnSubmit} disabled={submitting}>
-              {submitting ? 'Adding…' : 'Add skill'}
+            <button type="submit" className={styles.btnSubmit} disabled={submitting || importing}>
+              {submitting
+                ? pendingAssets.length > 0
+                  ? 'Uploading assets…'
+                  : 'Adding…'
+                : 'Add skill'}
             </button>
           </div>
         </form>

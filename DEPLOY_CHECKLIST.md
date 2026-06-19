@@ -107,7 +107,59 @@ Repo → **Settings** → **Secrets and variables** → **Actions** → **New re
 
 ---
 
-## 9 — Delete Old SWA Secrets (optional cleanup)
+## 9 — Create Azure Storage Account for Skill Assets
+
+This enables binary asset uploads (fonts, images, etc.) when importing `.skill` files.
+
+### 9a — Create the Storage Account
+
+1. Azure Portal → **Create a resource** → search **Storage account**
+2. Fill in:
+   - **Resource group**: same as your Functions app
+   - **Storage account name**: e.g. `nzrugbyskillassets` (lowercase, letters/numbers only, globally unique)
+   - **Region**: Australia East (same as Functions app)
+   - **Redundancy**: LRS (lowest cost)
+3. Click **Review + create** → **Create**
+
+### 9b — Create the Blob Container
+
+1. Storage account → **Data storage** → **Containers** → **+ Container**
+2. Name: `skill-assets`
+3. Public access level: **Private (no anonymous access)** — assets are served via SAS URLs
+
+### 9c — Configure CORS on the Storage Account
+
+Storage account → **Settings** → **Resource sharing (CORS)** → **Blob service** tab → **Add rule**:
+
+| Field | Value |
+|---|---|
+| Allowed origins | `https://skills.ai.nz.rugby` |
+| Allowed methods | `PUT, GET` |
+| Allowed headers | `*` |
+| Exposed headers | `*` |
+| Max age | `3600` |
+
+Click **Save**.
+
+### 9d — Get the Storage Account Key
+
+Storage account → **Security + networking** → **Access keys** → copy **key1** → **Key** value.
+
+### 9e — Add Environment Variables to the Functions App
+
+Functions App → **Settings** → **Environment variables** → add:
+
+| Name | Value |
+|---|---|
+| `STORAGE_ACCOUNT_NAME` | Your storage account name (e.g. `nzrugbyskillassets`) |
+| `STORAGE_ACCOUNT_KEY` | The key1 value from step 9d |
+| `STORAGE_CONTAINER` | `skill-assets` |
+
+Click **Apply** and **Confirm**.
+
+---
+
+## 10 — Delete Old SWA Secrets (optional cleanup)
 
 You can delete `AZURE_STATIC_WEB_APPS_API_TOKEN` and `AZURE_STATIC_WEB_APPS_API_TOKEN_YELLOW_FLOWER_088B51900` from GitHub secrets — they're no longer used.
 
@@ -125,7 +177,7 @@ Watch the Actions tab — two jobs will run in parallel: `deploy-frontend` and `
 
 ---
 
-## 11 — Configure Custom Domain
+## 12 — Configure Custom Domain
 
 After the first successful deploy:
 

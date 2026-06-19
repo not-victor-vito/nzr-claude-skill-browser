@@ -199,6 +199,8 @@ export default function App() {
           onClose={() => setShowSubmitForm(false)}
           onSubmit={handleSubmit}
           submitting={submitting}
+          getToken={getToken}
+          apiBase={API_BASE}
         />
       )}
     </div>

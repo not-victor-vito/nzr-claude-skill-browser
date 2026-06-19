@@ -1,8 +1,29 @@
 import JSZip from 'jszip'
 
+const CONTENT_TYPES = {
+  ttf: 'font/ttf',
+  otf: 'font/otf',
+  woff: 'font/woff',
+  woff2: 'font/woff2',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  svg: 'image/svg+xml',
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+}
+
+function guessContentType(filename) {
+  const ext = filename.split('.').pop()?.toLowerCase() || ''
+  return CONTENT_TYPES[ext] || 'application/octet-stream'
+}
+
+const IGNORE = ['desktop.ini', 'thumbs.db', '.ds_store']
+
 /**
- * Parse a .skill file (zip) and extract structured data for the skill browser.
- * Returns { title, description, prompt } pre-populated from SKILL.md frontmatter.
+ * Parse a .skill file (zip) and return:
+ *   { title, description, prompt, assets: [{ name, data: Uint8Array, contentType }] }
  */
 export async function parseSkillFile(file) {
   let zip
@@ -12,41 +33,57 @@ export async function parseSkillFile(file) {
     throw new Error('Could not read file — make sure it is a valid .skill file.')
   }
 
-  // Find SKILL.md anywhere in the zip (typically at <skill-name>/SKILL.md)
-  const skillMdEntry = Object.values(zip.files).find(
+  const entries = Object.values(zip.files)
+
+  // Find SKILL.md
+  const skillMdEntry = entries.find(
     (f) => !f.dir && (f.name.endsWith('/SKILL.md') || f.name === 'SKILL.md'),
   )
-
-  if (!skillMdEntry) {
-    throw new Error('No SKILL.md found inside this .skill file.')
-  }
+  if (!skillMdEntry) throw new Error('No SKILL.md found inside this .skill file.')
 
   const content = await skillMdEntry.async('string')
-  return parseSkillMd(content)
+  const { title, description, prompt } = parseSkillMd(content)
+
+  // Determine the root folder prefix (e.g. "nzr-pptx/")
+  const rootPrefix = skillMdEntry.name.includes('/')
+    ? skillMdEntry.name.split('/')[0] + '/'
+    : ''
+
+  // Extract binary assets (everything except SKILL.md and ignored files)
+  const assets = []
+  for (const entry of entries) {
+    if (entry.dir) continue
+    if (entry.name === skillMdEntry.name) continue
+
+    const basename = entry.name.split('/').pop().toLowerCase()
+    if (IGNORE.includes(basename)) continue
+
+    // Path relative to skill root (e.g. "assets/fonts/DMSans.ttf")
+    const relativePath = rootPrefix ? entry.name.slice(rootPrefix.length) : entry.name
+    if (!relativePath) continue
+
+    const data = await entry.async('uint8array')
+    const contentType = guessContentType(relativePath)
+    assets.push({ name: relativePath, data, contentType })
+  }
+
+  return { title, description, prompt, assets }
 }
 
 function parseSkillMd(content) {
-  // Split frontmatter from body
   const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/)
 
   if (!fmMatch) {
-    // No frontmatter — use whole content as prompt
     return { title: '', description: '', prompt: content.trim() }
   }
 
   const frontmatter = fmMatch[1]
-  // Use the full content (including frontmatter) as the prompt so the skill
-  // is complete when copied into Cowork / Claude Code.
   const prompt = content.trim()
 
-  // Parse name (single-line value)
   const nameMatch = frontmatter.match(/^name:\s*(.+)$/m)
   const title = nameMatch ? nameMatch[1].trim().replace(/^['"]|['"]$/g, '') : ''
 
-  // Parse description — handles both inline and YAML block scalar (`>`)
   let description = ''
-
-  // Block scalar: description: >\n  line one\n  line two
   const blockMatch = frontmatter.match(/^description:\s*[>|]\s*\r?\n((?:[ \t]+[^\r\n]*\r?\n?)+)/m)
   if (blockMatch) {
     description = blockMatch[1]
@@ -56,17 +93,11 @@ function parseSkillMd(content) {
       .join(' ')
       .trim()
   } else {
-    // Inline: description: Some text here
     const inlineMatch = frontmatter.match(/^description:\s*(.+)$/m)
-    if (inlineMatch) {
-      description = inlineMatch[1].trim().replace(/^['"]|['"]$/g, '')
-    }
+    if (inlineMatch) description = inlineMatch[1].trim().replace(/^['"]|['"]$/g, '')
   }
 
-  // Truncate to 200 chars (our Cosmos field limit)
-  if (description.length > 200) {
-    description = description.slice(0, 197) + '…'
-  }
+  if (description.length > 200) description = description.slice(0, 197) + '…'
 
   return { title, description, prompt }
 }

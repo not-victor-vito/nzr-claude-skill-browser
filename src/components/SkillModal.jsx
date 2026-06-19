@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import JSZip from 'jszip'
 import styles from './SkillModal.module.css'
 
 function formatDate(iso) {
@@ -16,8 +17,17 @@ function getInitials(name) {
     .join('')
 }
 
+function slugify(title) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50) || 'skill'
+}
+
 export default function SkillModal({ skill, onClose, onCopy }) {
-  const [downloaded, setDownloaded] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState(null)
 
   // Close on Escape
   useEffect(() => {
@@ -28,15 +38,45 @@ export default function SkillModal({ skill, onClose, onCopy }) {
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  function handleDownload() {
-    const blob = new Blob([skill.prompt], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${skill.title.replace(/\s+/g, '_').toLowerCase()}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
-    setDownloaded(true)
+  async function handleDownload() {
+    setDownloading(true)
+    setDownloadError(null)
+    try {
+      const slug = slugify(skill.title)
+      const zip = new JSZip()
+      const folder = zip.folder(slug)
+
+      // Add SKILL.md
+      folder.file('SKILL.md', skill.prompt)
+
+      // Fetch and add binary assets
+      const assets = skill.assets || []
+      await Promise.all(
+        assets.map(async (asset) => {
+          try {
+            const res = await fetch(asset.url)
+            if (!res.ok) throw new Error(`${res.status}`)
+            const data = await res.arrayBuffer()
+            folder.file(asset.name, data)
+          } catch (err) {
+            console.warn(`Skipping asset ${asset.name}: ${err.message}`)
+          }
+        }),
+      )
+
+      const blob = await zip.generateAsync({ type: 'blob' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${slug}.skill`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setDownloadError('Download failed — please try again.')
+      console.error('Download error:', err)
+    } finally {
+      setDownloading(false)
+    }
   }
 
   return (
@@ -83,31 +123,15 @@ export default function SkillModal({ skill, onClose, onCopy }) {
         )}
 
         <div className={styles.footer}>
-          <button className={styles.btnDownload} onClick={handleDownload}>
-            ↓ Download prompt
+          <button
+            className={styles.btnDownload}
+            onClick={handleDownload}
+            disabled={downloading}
+          >
+            {downloading ? 'Preparing…' : '↓ Download as .skill'}
           </button>
+          {downloadError && <span className={styles.downloadError}>{downloadError}</span>}
         </div>
-
-        {downloaded && (
-          <div className={styles.instructions}>
-            <div className={styles.instructionsTitle}>✓ Downloaded — here's how to use it</div>
-            <ol className={styles.steps}>
-              <li>
-                Open <strong>Claude</strong> at{' '}
-                <a href="https://claude.ai" target="_blank" rel="noreferrer">
-                  claude.ai
-                </a>{' '}
-                or in the desktop app
-              </li>
-              <li>Start a new conversation</li>
-              <li>Open the downloaded <code>.txt</code> file, copy the contents</li>
-              <li>Paste into the Claude message box and press Enter</li>
-            </ol>
-            <div className={styles.instructionsTip}>
-              Tip: you can also click <strong>Copy</strong> above and paste directly — no download needed.
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

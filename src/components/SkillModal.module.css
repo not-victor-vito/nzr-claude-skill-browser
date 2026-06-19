@@ -170,8 +170,20 @@
   transition: background 0.1s;
 }
 
-.btnDownload:hover {
+.btnDownload:hover:not(:disabled) {
   background: #fafaf9;
+}
+
+.btnDownload:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.downloadError {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #dc2626;
 }
 
 /* Post-download instructions */
