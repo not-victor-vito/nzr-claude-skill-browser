@@ -7,16 +7,6 @@ import SubmitSkillForm from './components/SubmitSkillForm.jsx'
 import { apiScope } from './authConfig.js'
 import styles from './App.module.css'
 
-const CATEGORIES = ['All', 'Drafting', 'Analysis', 'Summarising', 'Meetings', 'Email', 'Data']
-
-const CATEGORY_ICONS = {
-  Drafting: '✏️',
-  Analysis: '📊',
-  Summarising: '📄',
-  Meetings: '👥',
-  Email: '✉️',
-  Data: '🗄️',
-}
 
 // In production VITE_API_BASE_URL points to the standalone Functions app.
 // In dev, it's unset and Vite proxies /api → localhost:7071.
@@ -27,7 +17,6 @@ export default function App() {
   const [skills, setSkills] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [activeCategory, setActiveCategory] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedSkill, setSelectedSkill] = useState(null)
   const [showSubmitForm, setShowSubmitForm] = useState(false)
@@ -72,15 +61,14 @@ export default function App() {
   }, [fetchSkills])
 
   const filteredSkills = skills.filter((s) => {
-    const matchesCategory = activeCategory === 'All' || s.category === activeCategory
     const q = searchQuery.toLowerCase()
-    const matchesSearch =
+    return (
       !q ||
       s.title.toLowerCase().includes(q) ||
       s.description.toLowerCase().includes(q) ||
       s.prompt.toLowerCase().includes(q) ||
       (s.tags || []).some((t) => t.toLowerCase().includes(q))
-    return matchesCategory && matchesSearch
+    )
   })
 
   const totalSkills = skills.length
@@ -171,18 +159,6 @@ export default function App() {
           </div>
         </div>
 
-        <div className={styles.tabs}>
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              className={`${styles.tab} ${activeCategory === cat ? styles.tabActive : ''}`}
-              onClick={() => setActiveCategory(cat)}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
         {loading && <div className={styles.message}>Loading skills…</div>}
         {error && (
           <div className={styles.error}>
@@ -201,7 +177,7 @@ export default function App() {
               <SkillCard
                 key={skill.id}
                 skill={skill}
-                icon={CATEGORY_ICONS[skill.category] || '📝'}
+                icon="📝"
                 onPreview={() => setSelectedSkill(skill)}
                 onCopy={() => handleCopy(skill)}
               />
@@ -223,7 +199,6 @@ export default function App() {
           onClose={() => setShowSubmitForm(false)}
           onSubmit={handleSubmit}
           submitting={submitting}
-          categories={CATEGORIES.filter((c) => c !== 'All')}
         />
       )}
     </div>

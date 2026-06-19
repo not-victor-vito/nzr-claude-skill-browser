@@ -2,7 +2,6 @@ const { app } = require('@azure/functions')
 const { getContainer } = require('../../shared/cosmos')
 const { v4: uuidv4 } = require('uuid')
 
-const VALID_CATEGORIES = ['Drafting', 'Analysis', 'Summarising', 'Meetings', 'Email', 'Data']
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function json(data, status = 200) {
@@ -78,8 +77,6 @@ app.http('PostSkill', {
 
     if (!title || typeof title !== 'string' || !title.trim())
       return json({ error: 'title is required.' }, 400)
-    if (!category || !VALID_CATEGORIES.includes(category))
-      return json({ error: `category must be one of: ${VALID_CATEGORIES.join(', ')}.` }, 400)
     if (!prompt || typeof prompt !== 'string' || !prompt.trim())
       return json({ error: 'prompt is required.' }, 400)
     if (prompt.length > 10000)
@@ -88,7 +85,6 @@ app.http('PostSkill', {
     const item = {
       id: uuidv4(),
       title: title.trim().slice(0, 100),
-      category,
       description: (description || '').toString().trim().slice(0, 200),
       prompt: prompt.trim(),
       tags: Array.isArray(tags) ? tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 10) : [],

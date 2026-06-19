@@ -10,7 +10,7 @@ const INITIAL = {
   tags: '',
 }
 
-export default function SubmitSkillForm({ onClose, onSubmit, submitting, categories }) {
+export default function SubmitSkillForm({ onClose, onSubmit, submitting }) {
   const [form, setForm] = useState(INITIAL)
   const [error, setError] = useState(null)
   const [importNotice, setImportNotice] = useState(null)
@@ -47,7 +47,7 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, categor
         prompt: parsed.prompt || prev.prompt,
         // leave category and tags for the user to fill in
       }))
-      setImportNotice(`Imported from ${file.name} — select a category and submit.`)
+      setImportNotice(`Imported from ${file.name} — review the details and submit.`)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -58,14 +58,13 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, categor
   async function handleSubmit(e) {
     e.preventDefault()
     setError(null)
-    if (!form.title.trim() || !form.category || !form.prompt.trim()) {
-      setError('Title, category, and prompt are required.')
+    if (!form.title.trim() || !form.prompt.trim()) {
+      setError('Title and prompt are required.')
       return
     }
     try {
       await onSubmit({
         title: form.title.trim(),
-        category: form.category,
         description: form.description.trim(),
         prompt: form.prompt.trim(),
         tags: form.tags
@@ -122,23 +121,6 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, categor
               maxLength={100}
               required
             />
-          </label>
-
-          <label className={styles.label}>
-            Category *
-            <select
-              className={styles.select}
-              value={form.category}
-              onChange={(e) => set('category', e.target.value)}
-              required
-            >
-              <option value="">Select a category…</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
           </label>
 
           <label className={styles.label}>
