@@ -74,7 +74,7 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting }) {
         title: form.title.trim(),
         icon: form.icon,
         description: form.description.trim(),
-        prompt: form.prompt.trim(),
+        prompt: form.prompt.trim().slice(0, 20000),
         tags: form.tags
           .split(',')
           .map((t) => t.trim())

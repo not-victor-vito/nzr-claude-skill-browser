@@ -79,8 +79,8 @@ app.http('PostSkill', {
       return json({ error: 'title is required.' }, 400)
     if (!prompt || typeof prompt !== 'string' || !prompt.trim())
       return json({ error: 'prompt is required.' }, 400)
-    if (prompt.length > 10000)
-      return json({ error: 'prompt must be 10,000 characters or fewer.' }, 400)
+    if (prompt.length > 20000)
+      return json({ error: 'prompt must be 20,000 characters or fewer.' }, 400)
 
     const item = {
       id: uuidv4(),
