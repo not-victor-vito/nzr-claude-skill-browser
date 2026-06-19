@@ -44,7 +44,24 @@ app.http('PostSkill', {
       try {
         const decoded = Buffer.from(principalHeader, 'base64').toString('utf8')
         const principal = JSON.parse(decoded)
-        submittedBy = principal.userDetails || principal.userId || 'unknown'
+        if (principal.userDetails) {
+          // SWA format
+          submittedBy = principal.userDetails
+        } else if (Array.isArray(principal.claims)) {
+          // App Service Easy Auth format — use name_typ to find the identity claim
+          const nameTyp =
+            principal.name_typ ||
+            'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn'
+          const identityClaim = principal.claims.find((c) => c.typ === nameTyp)
+          const fallbackClaim = principal.claims.find(
+            (c) =>
+              c.typ === 'preferred_username' ||
+              c.typ === 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress' ||
+              c.typ === 'email',
+          )
+          submittedBy =
+            identityClaim?.val || fallbackClaim?.val || principal.userId || 'unknown'
+        }
       } catch {
         context.warn('Could not parse x-ms-client-principal')
       }
