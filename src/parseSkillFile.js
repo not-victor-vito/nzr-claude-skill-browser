@@ -35,19 +35,22 @@ export async function parseSkillFile(file) {
 
   const entries = Object.values(zip.files)
 
-  // Find SKILL.md
+  // Find SKILL.md (case-insensitive, any depth)
   const skillMdEntry = entries.find(
-    (f) => !f.dir && (f.name.endsWith('/SKILL.md') || f.name === 'SKILL.md'),
+    (f) => !f.dir && f.name.split('/').pop().toLowerCase() === 'skill.md',
   )
-  if (!skillMdEntry) throw new Error('No SKILL.md found inside this .skill file.')
+  if (!skillMdEntry) {
+    const names = entries.filter((f) => !f.dir).map((f) => f.name).join(', ')
+    throw new Error(`No SKILL.md found inside this .skill file. Contents: ${names || '(empty)'}`)
+  }
 
   const content = await skillMdEntry.async('string')
   const { title, description, prompt } = parseSkillMd(content)
 
   // Determine the root folder prefix (e.g. "nzr-pptx/")
-  const rootPrefix = skillMdEntry.name.includes('/')
-    ? skillMdEntry.name.split('/')[0] + '/'
-    : ''
+  // SKILL.md might be at root or inside one folder level
+  const parts = skillMdEntry.name.split('/')
+  const rootPrefix = parts.length > 1 ? parts[0] + '/' : ''
 
   // Extract binary assets (everything except SKILL.md and ignored files)
   const assets = []
