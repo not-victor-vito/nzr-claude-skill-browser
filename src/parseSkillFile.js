@@ -19,55 +19,123 @@ function guessContentType(filename) {
   return CONTENT_TYPES[ext] || 'application/octet-stream'
 }
 
-const IGNORE = ['desktop.ini', 'thumbs.db', '.ds_store']
+// Files to skip regardless of where they appear
+const IGNORE = new Set(['desktop.ini', 'thumbs.db', '.ds_store', '.gitkeep'])
+
+function shouldIgnore(name) {
+  const base = name.split('/').pop().toLowerCase()
+  return IGNORE.has(base) || base.startsWith('.')
+}
 
 /**
- * Parse a .skill file (zip) and return:
+ * Parse a .skill or .zip file and return:
  *   { title, description, prompt, assets: [{ name, data: Uint8Array, contentType }] }
+ *
+ * Handles three structures:
+ *   A) Direct .skill zip containing SKILL.md (+ optional asset files)
+ *   B) Package .zip containing a .skill file (+ optional loose asset files alongside it)
+ *   C) Direct .skill zip containing SKILL.md inside one subfolder
  */
 export async function parseSkillFile(file) {
-  let zip
+  let outerZip
   try {
-    zip = await JSZip.loadAsync(file)
+    outerZip = await JSZip.loadAsync(file)
   } catch {
-    throw new Error('Could not read file — make sure it is a valid .skill file.')
+    throw new Error('Could not read file — make sure it is a .skill or .zip file.')
   }
 
-  const entries = Object.values(zip.files)
+  const outerEntries = Object.values(outerZip.files)
 
-  // Find SKILL.md (case-insensitive, any depth)
-  const skillMdEntry = entries.find(
+  // Check if there's a .skill file inside (package zip — case B)
+  const innerSkillEntry = outerEntries.find(
+    (f) => !f.dir && f.name.split('/').pop().toLowerCase().endsWith('.skill'),
+  )
+
+  if (innerSkillEntry) {
+    // --- Case B: outer zip is a package containing a .skill + loose assets ---
+    const skillData = await innerSkillEntry.async('arraybuffer')
+    let innerZip
+    try {
+      innerZip = await JSZip.loadAsync(skillData)
+    } catch {
+      throw new Error(`Could not open ${innerSkillEntry.name} — it may be corrupted.`)
+    }
+
+    const innerEntries = Object.values(innerZip.files)
+    const skillMdEntry = innerEntries.find(
+      (f) => !f.dir && f.name.split('/').pop().toLowerCase() === 'skill.md',
+    )
+    if (!skillMdEntry) {
+      throw new Error(`No SKILL.md found inside ${innerSkillEntry.name}.`)
+    }
+
+    const content = await skillMdEntry.async('string')
+    const { title, description, prompt } = parseSkillMd(content)
+
+    // Assets from inside the .skill zip
+    const innerRootPrefix = skillMdEntry.name.includes('/')
+      ? skillMdEntry.name.split('/')[0] + '/'
+      : ''
+    const assets = []
+
+    for (const entry of innerEntries) {
+      if (entry.dir || entry.name === skillMdEntry.name) continue
+      if (shouldIgnore(entry.name)) continue
+      const rel = innerRootPrefix ? entry.name.slice(innerRootPrefix.length) : entry.name
+      if (!rel) continue
+      const data = await entry.async('uint8array')
+      assets.push({ name: rel, data, contentType: guessContentType(rel) })
+    }
+
+    // Loose assets from the outer package zip (skip the .skill itself and ignored files)
+    const outerRootPrefix = innerSkillEntry.name.includes('/')
+      ? innerSkillEntry.name.split('/')[0] + '/'
+      : ''
+
+    for (const entry of outerEntries) {
+      if (entry.dir) continue
+      if (shouldIgnore(entry.name)) continue
+      // Skip the .skill file itself
+      if (entry.name === innerSkillEntry.name) continue
+
+      const rel = outerRootPrefix ? entry.name.slice(outerRootPrefix.length) : entry.name
+      if (!rel) continue
+      // Don't duplicate an asset already found inside the .skill
+      if (assets.some((a) => a.name === rel)) continue
+
+      const data = await entry.async('uint8array')
+      assets.push({ name: rel, data, contentType: guessContentType(rel) })
+    }
+
+    return { title, description, prompt, assets }
+  }
+
+  // --- Cases A / C: the uploaded file is itself a .skill zip ---
+  const skillMdEntry = outerEntries.find(
     (f) => !f.dir && f.name.split('/').pop().toLowerCase() === 'skill.md',
   )
   if (!skillMdEntry) {
-    const names = entries.filter((f) => !f.dir).map((f) => f.name).join(', ')
-    throw new Error(`No SKILL.md found inside this .skill file. Contents: ${names || '(empty)'}`)
+    const names = outerEntries.filter((f) => !f.dir).map((f) => f.name).join(', ')
+    throw new Error(
+      `No SKILL.md found. Contents: ${names || '(empty)'}`,
+    )
   }
 
   const content = await skillMdEntry.async('string')
   const { title, description, prompt } = parseSkillMd(content)
 
-  // Determine the root folder prefix (e.g. "nzr-pptx/")
-  // SKILL.md might be at root or inside one folder level
-  const parts = skillMdEntry.name.split('/')
-  const rootPrefix = parts.length > 1 ? parts[0] + '/' : ''
+  const rootPrefix = skillMdEntry.name.includes('/')
+    ? skillMdEntry.name.split('/')[0] + '/'
+    : ''
 
-  // Extract binary assets (everything except SKILL.md and ignored files)
   const assets = []
-  for (const entry of entries) {
-    if (entry.dir) continue
-    if (entry.name === skillMdEntry.name) continue
-
-    const basename = entry.name.split('/').pop().toLowerCase()
-    if (IGNORE.includes(basename)) continue
-
-    // Path relative to skill root (e.g. "assets/fonts/DMSans.ttf")
-    const relativePath = rootPrefix ? entry.name.slice(rootPrefix.length) : entry.name
-    if (!relativePath) continue
-
+  for (const entry of outerEntries) {
+    if (entry.dir || entry.name === skillMdEntry.name) continue
+    if (shouldIgnore(entry.name)) continue
+    const rel = rootPrefix ? entry.name.slice(rootPrefix.length) : entry.name
+    if (!rel) continue
     const data = await entry.async('uint8array')
-    const contentType = guessContentType(relativePath)
-    assets.push({ name: relativePath, data, contentType })
+    assets.push({ name: rel, data, contentType: guessContentType(rel) })
   }
 
   return { title, description, prompt, assets }
