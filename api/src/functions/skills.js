@@ -16,7 +16,20 @@ function json(data, status = 200) {
   })
 }
 
-// GET /api/skills
+// Sanitise a user-supplied blob path: normalise separators, remove traversal segments,
+// strip non-safe characters per segment, then truncate.
+function sanitiseBlobName(filename) {
+  return filename
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter((seg) => seg && seg !== '.' && seg !== '..')
+    .map((seg) => seg.replace(/[^\w.\-\s]/g, '_').trim())
+    .filter(Boolean)
+    .join('/')
+    .slice(0, 300)
+}
+
+// GET /api/skills — returns card-level fields only (no prompt) to keep payload small
 app.http('GetSkills', {
   methods: ['GET'],
   authLevel: 'anonymous',
@@ -25,12 +38,37 @@ app.http('GetSkills', {
     try {
       const container = getContainer()
       const { resources } = await container.items
-        .query({ query: 'SELECT * FROM c ORDER BY c.submitted_at DESC' })
+        .query({
+          query:
+            'SELECT c.id, c.title, c.icon, c.description, c.tags, c.assets, ' +
+            'c.submitted_by, c.submitted_at, c.use_count FROM c ORDER BY c.submitted_at DESC',
+        })
         .fetchAll()
       return json(resources)
     } catch (err) {
       context.error('GetSkills error:', err.message)
       return json({ error: 'Failed to retrieve skills.' }, 500)
+    }
+  },
+})
+
+// GET /api/skills/:id — full record including prompt, fetched on modal open
+app.http('GetSkill', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'skills/{id}',
+  handler: async (request, context) => {
+    const { id } = request.params
+    if (!id || !UUID_RE.test(id)) return json({ error: 'Invalid skill id.' }, 400)
+    try {
+      const container = getContainer()
+      const { resource } = await container.item(id, id).read()
+      if (!resource) return json({ error: 'Skill not found.' }, 404)
+      return json(resource)
+    } catch (err) {
+      if (err.code === 404) return json({ error: 'Skill not found.' }, 404)
+      context.error('GetSkill error:', err.message)
+      return json({ error: 'Failed to retrieve skill.' }, 500)
     }
   },
 })
@@ -49,10 +87,8 @@ app.http('PostSkill', {
         const decoded = Buffer.from(principalHeader, 'base64').toString('utf8')
         const principal = JSON.parse(decoded)
         if (principal.userDetails) {
-          // SWA format
           submittedBy = principal.userDetails
         } else if (Array.isArray(principal.claims)) {
-          // App Service Easy Auth format — use name_typ to find the identity claim
           const nameTyp =
             principal.name_typ ||
             'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn'
@@ -78,7 +114,7 @@ app.http('PostSkill', {
       return json({ error: 'Request body must be JSON.' }, 400)
     }
 
-    const { title, icon, category, description, prompt, tags, assets } = body
+    const { title, icon, description, prompt, tags, assets } = body
 
     if (!title || typeof title !== 'string' || !title.trim())
       return json({ error: 'title is required.' }, 400)
@@ -87,16 +123,30 @@ app.http('PostSkill', {
     if (prompt.length > 20000)
       return json({ error: 'prompt must be 20,000 characters or fewer.' }, 400)
 
+    // Only accept asset URLs from our own storage account
+    const storageAccount = process.env.STORAGE_ACCOUNT_NAME
+    const allowedPrefix = storageAccount
+      ? `https://${storageAccount}.blob.core.windows.net/`
+      : null
+
     const item = {
       id: uuidv4(),
       title: title.trim().slice(0, 100),
       icon: typeof icon === 'string' ? icon.trim().slice(0, 8) : '📝',
       description: (description || '').toString().trim().slice(0, 200),
       prompt: prompt.trim(),
-      tags: Array.isArray(tags) ? tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 10) : [],
+      tags: Array.isArray(tags)
+        ? tags.map((t) => String(t).trim().slice(0, 50)).filter(Boolean).slice(0, 10)
+        : [],
       assets: Array.isArray(assets)
         ? assets
-            .filter((a) => a && typeof a.name === 'string' && typeof a.url === 'string')
+            .filter(
+              (a) =>
+                a &&
+                typeof a.name === 'string' &&
+                typeof a.url === 'string' &&
+                (!allowedPrefix || a.url.startsWith(allowedPrefix)),
+            )
             .slice(0, 50)
         : [],
       submitted_by: submittedBy,
@@ -150,7 +200,8 @@ app.http('IncrementUseCount', {
 })
 
 // POST /api/upload-url
-// Returns a short-lived SAS URL for direct browser-to-blob upload.
+// Returns a short-lived write SAS for direct browser upload, and a long-lived read SAS
+// stored in Cosmos so downloads work without making the container public.
 app.http('GetUploadUrl', {
   methods: ['POST'],
   authLevel: 'anonymous',
@@ -177,11 +228,14 @@ app.http('GetUploadUrl', {
       return json({ error: 'filename is required.' }, 400)
     }
 
-    const safeName = filename.replace(/\.\./g, '').replace(/^\/+/, '').slice(0, 300)
+    const safeName = sanitiseBlobName(filename)
+    if (!safeName) return json({ error: 'Invalid filename.' }, 400)
+
     const blobPath = `${uuidv4()}/${safeName}`
 
     try {
       const credential = new StorageSharedKeyCredential(accountName, accountKey)
+
       const sasToken = generateBlobSASQueryParameters(
         {
           containerName,
@@ -194,8 +248,6 @@ app.http('GetUploadUrl', {
         credential,
       ).toString()
 
-      // Long-lived read SAS (10 years) stored in Cosmos so downloads work without
-      // making the container public.
       const readSasToken = generateBlobSASQueryParameters(
         {
           containerName,

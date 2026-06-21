@@ -7,7 +7,6 @@ import SubmitSkillForm from './components/SubmitSkillForm.jsx'
 import { apiScope } from './authConfig.js'
 import styles from './App.module.css'
 
-
 // In production VITE_API_BASE_URL points to the standalone Functions app.
 // In dev, it's unset and Vite proxies /api → localhost:7071.
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -26,7 +25,16 @@ export default function App() {
   const toastTimer = useRef(null)
   const slowTimer = useRef(null)
 
-  async function getToken() {
+  // Clean up timers on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeout(toastTimer.current)
+      clearTimeout(slowTimer.current)
+    }
+  }, [])
+
+  // Stable getToken — re-created only if instance or accounts changes
+  const getToken = useCallback(async () => {
     try {
       const result = await instance.acquireTokenSilent({
         scopes: [apiScope],
@@ -40,14 +48,13 @@ export default function App() {
       }
       throw err
     }
-  }
+  }, [instance, accounts])
 
   const fetchSkills = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
       setLoadingSlow(false)
-      // Show a "taking longer than usual" hint after 4 seconds (cold start)
       slowTimer.current = setTimeout(() => setLoadingSlow(true), 4000)
       const token = await getToken()
       const res = await fetch(`${API_BASE}/skills`, {
@@ -63,19 +70,35 @@ export default function App() {
       setLoading(false)
       setLoadingSlow(false)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [getToken])
 
   useEffect(() => {
     fetchSkills()
   }, [fetchSkills])
 
+  // Open modal immediately with card data, then fetch full record (including prompt)
+  async function handleOpenSkill(skill) {
+    setSelectedSkill(skill)
+    if (!skill.prompt) {
+      try {
+        const token = await getToken()
+        const res = await fetch(`${API_BASE}/skills/${skill.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.ok) setSelectedSkill(await res.json())
+      } catch {
+        // modal stays open; prompt section shows loading state
+      }
+    }
+  }
+
+  // Search across title, description, and tags only — prompt is not in the list response
   const filteredSkills = skills.filter((s) => {
     const q = searchQuery.toLowerCase()
     return (
       !q ||
       s.title.toLowerCase().includes(q) ||
-      s.description.toLowerCase().includes(q) ||
-      s.prompt.toLowerCase().includes(q) ||
+      (s.description || '').toLowerCase().includes(q) ||
       (s.tags || []).some((t) => t.toLowerCase().includes(q))
     )
   })
@@ -119,6 +142,7 @@ export default function App() {
   }
 
   async function handleCopy(skill) {
+    if (!skill.prompt) return
     await navigator.clipboard.writeText(skill.prompt)
     setSkills((prev) =>
       prev.map((s) => (s.id === skill.id ? { ...s, use_count: (s.use_count || 0) + 1 } : s))
@@ -201,7 +225,7 @@ export default function App() {
                 key={skill.id}
                 skill={skill}
                 icon={skill.icon || '📝'}
-                onPreview={() => setSelectedSkill(skill)}
+                onPreview={() => handleOpenSkill(skill)}
                 onCopy={() => handleCopy(skill)}
               />
             ))}

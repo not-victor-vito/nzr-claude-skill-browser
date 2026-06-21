@@ -103,13 +103,19 @@ export default function SkillModal({ skill, onClose, onCopy }) {
         )}
 
         <div className={styles.promptSection}>
-          <div className={styles.promptLabel}>
-            Prompt
-            <button className={styles.copyInline} onClick={onCopy}>
-              ⎘ Copy
-            </button>
-          </div>
-          <div className={styles.promptBox}>{skill.prompt}</div>
+          {skill.prompt == null ? (
+            <div className={styles.promptLoading}>Loading prompt…</div>
+          ) : (
+            <>
+              <div className={styles.promptLabel}>
+                Prompt
+                <button className={styles.copyInline} onClick={onCopy}>
+                  ⎘ Copy
+                </button>
+              </div>
+              <div className={styles.promptBox}>{skill.prompt}</div>
+            </>
+          )}
         </div>
 
         {skill.tags && skill.tags.length > 0 && (

@@ -127,6 +127,16 @@
   background: #fafaf9;
 }
 
+.promptLoading {
+  background: #fafaf9;
+  border: 1px solid #e7e5e4;
+  border-radius: 10px;
+  padding: 16px;
+  font-size: 13px;
+  color: #a8a29e;
+  text-align: center;
+}
+
 .promptBox {
   background: #fafaf9;
   border: 1px solid #e7e5e4;
