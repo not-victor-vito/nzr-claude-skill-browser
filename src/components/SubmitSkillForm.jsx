@@ -145,7 +145,7 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
   }
 
   return (
-    <div className={styles.backdrop} onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className={styles.backdrop}>
       <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Add skill">
         <div className={styles.header}>
           <h2 className={styles.title}>Add skill</h2>

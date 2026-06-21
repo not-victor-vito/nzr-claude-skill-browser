@@ -22,7 +22,9 @@ export default function App() {
   const [showSubmitForm, setShowSubmitForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState(null)
+  const [loadingSlow, setLoadingSlow] = useState(false)
   const toastTimer = useRef(null)
+  const slowTimer = useRef(null)
 
   async function getToken() {
     try {
@@ -44,6 +46,9 @@ export default function App() {
     try {
       setLoading(true)
       setError(null)
+      setLoadingSlow(false)
+      // Show a "taking longer than usual" hint after 4 seconds (cold start)
+      slowTimer.current = setTimeout(() => setLoadingSlow(true), 4000)
       const token = await getToken()
       const res = await fetch(`${API_BASE}/skills`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -54,7 +59,9 @@ export default function App() {
     } catch (err) {
       setError(err.message)
     } finally {
+      clearTimeout(slowTimer.current)
       setLoading(false)
+      setLoadingSlow(false)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -168,7 +175,14 @@ export default function App() {
           </div>
         </div>
 
-        {loading && <div className={styles.message}>Loading skills…</div>}
+        {loading && (
+          <div className={styles.message}>
+            <div className={styles.loadingSpinner} />
+            {loadingSlow
+              ? 'Starting up — this takes a moment on first load…'
+              : 'Loading skills…'}
+          </div>
+        )}
         {error && (
           <div className={styles.error}>
             {error} —{' '}
