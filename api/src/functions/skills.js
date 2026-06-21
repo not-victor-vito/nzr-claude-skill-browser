@@ -194,10 +194,23 @@ app.http('GetUploadUrl', {
         credential,
       ).toString()
 
-      const sasUrl = `https://${accountName}.blob.core.windows.net/${containerName}/${blobPath}?${sasToken}`
-      const blobUrl = `https://${accountName}.blob.core.windows.net/${containerName}/${blobPath}`
+      // Long-lived read SAS (10 years) stored in Cosmos so downloads work without
+      // making the container public.
+      const readSasToken = generateBlobSASQueryParameters(
+        {
+          containerName,
+          blobName: blobPath,
+          permissions: BlobSASPermissions.parse('r'),
+          startsOn: new Date(),
+          expiresOn: new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000),
+        },
+        credential,
+      ).toString()
 
-      return json({ sasUrl, blobUrl })
+      const sasUrl = `https://${accountName}.blob.core.windows.net/${containerName}/${blobPath}?${sasToken}`
+      const readUrl = `https://${accountName}.blob.core.windows.net/${containerName}/${blobPath}?${readSasToken}`
+
+      return json({ sasUrl, readUrl })
     } catch (err) {
       context.error('GetUploadUrl error:', err.message)
       return json({ error: 'Could not generate upload URL.' }, 500)

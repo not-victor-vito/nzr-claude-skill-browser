@@ -23,6 +23,7 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
   const [importNotice, setImportNotice] = useState(null)
   const [importing, setImporting] = useState(false)
   const [pendingAssets, setPendingAssets] = useState([]) // [{ name, data: Uint8Array, contentType }]
+  const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -82,9 +83,9 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
       const body = await res.json().catch(() => ({}))
       throw new Error(body.error || `Upload URL request failed (${res.status})`)
     }
-    const { sasUrl, blobUrl } = await res.json()
+    const { sasUrl, readUrl } = await res.json()
 
-    // PUT directly to blob storage using the SAS URL
+    // PUT directly to blob storage using the write SAS URL
     const put = await fetch(sasUrl, {
       method: 'PUT',
       headers: {
@@ -95,7 +96,8 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
     })
     if (!put.ok) throw new Error(`Asset upload failed for ${asset.name} (${put.status})`)
 
-    return { name: asset.name, url: blobUrl }
+    // Store the long-lived read SAS URL so downloads work without making the container public
+    return { name: asset.name, url: readUrl }
   }
 
   async function handleSubmit(e) {
@@ -110,15 +112,20 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
       // Upload any pending assets before submitting the skill
       let uploadedAssets = []
       if (pendingAssets.length > 0) {
-        const token = await getToken()
-        const results = await Promise.allSettled(
-          pendingAssets.map((a) => uploadAsset(a, token)),
-        )
-        const failed = results.filter((r) => r.status === 'rejected')
-        if (failed.length > 0) {
-          throw new Error(`${failed.length} asset(s) failed to upload: ${failed[0].reason?.message}`)
+        setUploading(true)
+        try {
+          const token = await getToken()
+          const results = await Promise.allSettled(
+            pendingAssets.map((a) => uploadAsset(a, token)),
+          )
+          const failed = results.filter((r) => r.status === 'rejected')
+          if (failed.length > 0) {
+            throw new Error(`${failed.length} asset(s) failed to upload: ${failed[0].reason?.message}`)
+          }
+          uploadedAssets = results.map((r) => r.value)
+        } finally {
+          setUploading(false)
         }
-        uploadedAssets = results.map((r) => r.value)
       }
 
       await onSubmit({
@@ -237,7 +244,7 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
 
           {error && <div className={styles.error}>{error}</div>}
 
-          {submitting && pendingAssets.length > 0 && (
+          {uploading && (
             <div className={styles.uploadStatus}>
               <span className={styles.uploadSpinner} />
               Uploading {pendingAssets.length} asset{pendingAssets.length !== 1 ? 's' : ''}…
@@ -248,12 +255,8 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
             <button type="button" className={styles.btnCancel} onClick={onClose} disabled={submitting}>
               Cancel
             </button>
-            <button type="submit" className={styles.btnSubmit} disabled={submitting || importing}>
-              {submitting
-                ? pendingAssets.length > 0
-                  ? 'Uploading assets…'
-                  : 'Adding…'
-                : 'Add skill'}
+            <button type="submit" className={styles.btnSubmit} disabled={submitting || uploading || importing}>
+              {uploading ? 'Uploading assets…' : submitting ? 'Adding…' : 'Add skill'}
             </button>
           </div>
         </form>
