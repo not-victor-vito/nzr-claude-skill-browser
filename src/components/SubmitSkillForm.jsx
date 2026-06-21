@@ -237,6 +237,13 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
 
           {error && <div className={styles.error}>{error}</div>}
 
+          {submitting && pendingAssets.length > 0 && (
+            <div className={styles.uploadStatus}>
+              <span className={styles.uploadSpinner} />
+              Uploading {pendingAssets.length} asset{pendingAssets.length !== 1 ? 's' : ''}…
+            </div>
+          )}
+
           <div className={styles.footer}>
             <button type="button" className={styles.btnCancel} onClick={onClose} disabled={submitting}>
               Cancel

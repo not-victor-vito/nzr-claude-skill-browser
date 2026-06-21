@@ -245,3 +245,29 @@
   border-radius: 8px;
   padding: 10px 14px;
 }
+
+.uploadStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #4f46e5;
+  background: #f5f5ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.uploadSpinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #c7d2fe;
+  border-top-color: #4f46e5;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

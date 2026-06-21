@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import SkillCard from './components/SkillCard.jsx'
@@ -21,6 +21,8 @@ export default function App() {
   const [selectedSkill, setSelectedSkill] = useState(null)
   const [showSubmitForm, setShowSubmitForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
 
   async function getToken() {
     try {
@@ -77,6 +79,12 @@ export default function App() {
     : null
   const contributors = new Set(skills.map((s) => s.submitted_by).filter(Boolean)).size
 
+  function showToast(message) {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast(message)
+    toastTimer.current = setTimeout(() => setToast(null), 2750)
+  }
+
   async function handleSubmit(formData) {
     setSubmitting(true)
     try {
@@ -95,6 +103,7 @@ export default function App() {
       }
       await fetchSkills()
       setShowSubmitForm(false)
+      showToast('✓ Skill added!')
     } catch (err) {
       throw err
     } finally {
@@ -193,6 +202,8 @@ export default function App() {
           onCopy={() => handleCopy(selectedSkill)}
         />
       )}
+
+      {toast && <div className={styles.toast}>{toast}</div>}
 
       {showSubmitForm && (
         <SubmitSkillForm
