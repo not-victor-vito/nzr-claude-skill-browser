@@ -215,7 +215,7 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
               value={form.description}
               onChange={(e) => set('description', e.target.value)}
               placeholder="One sentence explaining what this prompt does"
-              maxLength={200}
+              maxLength={500}
             />
           </label>
 

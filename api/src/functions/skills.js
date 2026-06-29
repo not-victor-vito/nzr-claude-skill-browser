@@ -133,7 +133,7 @@ app.http('PostSkill', {
       id: uuidv4(),
       title: title.trim().slice(0, 100),
       icon: typeof icon === 'string' ? icon.trim().slice(0, 8) : '📝',
-      description: (description || '').toString().trim().slice(0, 200),
+      description: (description || '').toString().trim().slice(0, 500),
       prompt: prompt.trim(),
       tags: Array.isArray(tags)
         ? tags.map((t) => String(t).trim().slice(0, 50)).filter(Boolean).slice(0, 10)

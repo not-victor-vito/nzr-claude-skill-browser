@@ -168,7 +168,7 @@ function parseSkillMd(content) {
     if (inlineMatch) description = inlineMatch[1].trim().replace(/^['"]|['"]$/g, '')
   }
 
-  if (description.length > 200) description = description.slice(0, 197) + '…'
+  if (description.length > 500) description = description.slice(0, 497) + '…'
 
   return { title, description, prompt }
 }

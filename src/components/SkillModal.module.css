@@ -58,6 +58,8 @@
   font-size: 14px;
   color: #57534e;
   line-height: 1.6;
+  max-height: 120px;
+  overflow-y: auto;
 }
 
 .author {
