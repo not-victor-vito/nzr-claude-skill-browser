@@ -198,6 +198,101 @@
   color: #dc2626;
 }
 
+/* ── Owner actions (edit / delete) ── */
+.ownerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid #f5f5f4;
+}
+
+.btnEdit {
+  background: none;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #44403c;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.btnEdit:hover {
+  background: #fafaf9;
+  border-color: #d4d0cd;
+}
+
+.btnDelete {
+  background: none;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #dc2626;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.btnDelete:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.deleteConfirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.deleteConfirmText {
+  font-size: 13px;
+  color: #44403c;
+}
+
+.deleteConfirmBtns {
+  display: flex;
+  gap: 8px;
+}
+
+.btnCancelDelete {
+  flex: 1;
+  border: 1px solid #e7e5e4;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #44403c;
+  transition: background 0.1s;
+}
+
+.btnCancelDelete:hover {
+  background: #fafaf9;
+}
+
+.btnConfirmDelete {
+  flex: 1;
+  border: none;
+  background: #dc2626;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  transition: background 0.1s;
+}
+
+.btnConfirmDelete:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.btnConfirmDelete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Post-download instructions */
 .instructions {
   background: #f0fdf4;

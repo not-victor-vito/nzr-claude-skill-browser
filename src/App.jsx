@@ -19,6 +19,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedSkill, setSelectedSkill] = useState(null)
   const [showSubmitForm, setShowSubmitForm] = useState(false)
+  const [editingSkill, setEditingSkill] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState(null)
   const [loadingSlow, setLoadingSlow] = useState(false)
@@ -141,6 +142,44 @@ export default function App() {
     }
   }
 
+  async function handleUpdateSkill(skillId, formData) {
+    setSubmitting(true)
+    try {
+      const token = await getToken()
+      const res = await fetch(`${API_BASE}/skills/${skillId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(formData),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `Update failed (${res.status})`)
+      }
+      await fetchSkills()
+      setEditingSkill(null)
+      showToast('✓ Skill updated!')
+    } catch (err) {
+      throw err
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleDeleteSkill(skill) {
+    const token = await getToken()
+    const res = await fetch(`${API_BASE}/skills/${skill.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || `Delete failed (${res.status})`)
+    }
+    setSelectedSkill(null)
+    setSkills((prev) => prev.filter((s) => s.id !== skill.id))
+    showToast('Skill deleted')
+  }
+
   async function handleCopy(skill) {
     if (!skill.prompt) return
     await navigator.clipboard.writeText(skill.prompt)
@@ -238,6 +277,9 @@ export default function App() {
           skill={selectedSkill}
           onClose={() => setSelectedSkill(null)}
           onCopy={() => handleCopy(selectedSkill)}
+          currentUser={accounts[0]?.username}
+          onEdit={() => { setEditingSkill(selectedSkill); setSelectedSkill(null) }}
+          onDelete={() => handleDeleteSkill(selectedSkill)}
         />
       )}
 
@@ -250,6 +292,17 @@ export default function App() {
           submitting={submitting}
           getToken={getToken}
           apiBase={API_BASE}
+        />
+      )}
+
+      {editingSkill && (
+        <SubmitSkillForm
+          onClose={() => setEditingSkill(null)}
+          onSubmit={(formData) => handleUpdateSkill(editingSkill.id, formData)}
+          submitting={submitting}
+          getToken={getToken}
+          apiBase={API_BASE}
+          initialValues={editingSkill}
         />
       )}
     </div>

@@ -9,20 +9,32 @@ const EMOJIS = [
   '📢','🔐','⚙️','🧠','📦','🛠️','🗣️','🧩',
 ]
 
-const INITIAL = {
-  title: '',
-  icon: '📝',
-  description: '',
-  prompt: '',
-  tags: '',
+const INITIAL = { title: '', icon: '📝', description: '', prompt: '', tags: '' }
+
+function fromInitialValues(v) {
+  return {
+    title: v.title || '',
+    icon: v.icon || '📝',
+    description: v.description || '',
+    prompt: v.prompt || '',
+    tags: (v.tags || []).join(', '),
+  }
 }
 
-export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToken, apiBase }) {
-  const [form, setForm] = useState(INITIAL)
+export default function SubmitSkillForm({
+  onClose,
+  onSubmit,
+  submitting,
+  getToken,
+  apiBase,
+  initialValues = null, // present in edit mode
+}) {
+  const isEdit = Boolean(initialValues)
+  const [form, setForm] = useState(() => (initialValues ? fromInitialValues(initialValues) : INITIAL))
   const [error, setError] = useState(null)
   const [importNotice, setImportNotice] = useState(null)
   const [importing, setImporting] = useState(false)
-  const [pendingAssets, setPendingAssets] = useState([]) // [{ name, data: Uint8Array, contentType }]
+  const [pendingAssets, setPendingAssets] = useState([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
 
@@ -42,12 +54,10 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
-
     setImporting(true)
     setError(null)
     setImportNotice(null)
     setPendingAssets([])
-
     try {
       const parsed = await parseSkillFile(file)
       setForm((prev) => ({
@@ -67,16 +77,10 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
     }
   }
 
-  /**
-   * Upload a single asset via SAS token. Returns { name, url }.
-   */
   async function uploadAsset(asset, token) {
     const res = await fetch(`${apiBase}/upload-url`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ filename: asset.name, contentType: asset.contentType }),
     })
     if (!res.ok) {
@@ -84,19 +88,12 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
       throw new Error(body.error || `Upload URL request failed (${res.status})`)
     }
     const { sasUrl, readUrl } = await res.json()
-
-    // PUT directly to blob storage using the write SAS URL
     const put = await fetch(sasUrl, {
       method: 'PUT',
-      headers: {
-        'x-ms-blob-type': 'BlockBlob',
-        'Content-Type': asset.contentType,
-      },
+      headers: { 'x-ms-blob-type': 'BlockBlob', 'Content-Type': asset.contentType },
       body: asset.data,
     })
     if (!put.ok) throw new Error(`Asset upload failed for ${asset.name} (${put.status})`)
-
-    // Store the long-lived read SAS URL so downloads work without making the container public
     return { name: asset.name, url: readUrl }
   }
 
@@ -107,17 +104,13 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
       setError('Title and prompt are required.')
       return
     }
-
     try {
-      // Upload any pending assets before submitting the skill
       let uploadedAssets = []
       if (pendingAssets.length > 0) {
         setUploading(true)
         try {
           const token = await getToken()
-          const results = await Promise.allSettled(
-            pendingAssets.map((a) => uploadAsset(a, token)),
-          )
+          const results = await Promise.allSettled(pendingAssets.map((a) => uploadAsset(a, token)))
           const failed = results.filter((r) => r.status === 'rejected')
           if (failed.length > 0) {
             throw new Error(`${failed.length} asset(s) failed to upload: ${failed[0].reason?.message}`)
@@ -128,17 +121,19 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
         }
       }
 
-      await onSubmit({
+      const payload = {
         title: form.title.trim(),
         icon: form.icon,
         description: form.description.trim(),
         prompt: form.prompt.trim().slice(0, 20000),
-        tags: form.tags
-          .split(',')
-          .map((t) => t.trim())
-          .filter(Boolean),
-        assets: uploadedAssets,
-      })
+        tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
+      }
+      // In edit mode, don't overwrite existing assets unless new ones were uploaded
+      if (!isEdit || uploadedAssets.length > 0) {
+        payload.assets = uploadedAssets
+      }
+
+      await onSubmit(payload)
     } catch (err) {
       setError(err.message)
     }
@@ -146,33 +141,33 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
 
   return (
     <div className={styles.backdrop}>
-      <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Add skill">
+      <div className={styles.modal} role="dialog" aria-modal="true" aria-label={isEdit ? 'Edit skill' : 'Add skill'}>
         <div className={styles.header}>
-          <h2 className={styles.title}>Add skill</h2>
-          <button className={styles.closeBtn} onClick={onClose} aria-label="Close">
-            ✕
-          </button>
+          <h2 className={styles.title}>{isEdit ? 'Edit skill' : 'Add skill'}</h2>
+          <button className={styles.closeBtn} onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        {/* .skill file import */}
-        <div className={styles.importRow}>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".skill,.zip,application/zip"
-            className={styles.fileInputHidden}
-            onChange={handleFileChange}
-          />
-          <button
-            type="button"
-            className={styles.importBtn}
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing || submitting}
-          >
-            {importing ? 'Importing…' : '↑ Import from .skill file'}
-          </button>
-          <span className={styles.importHint}>or fill in manually below</span>
-        </div>
+        {/* .skill file import — only shown in create mode */}
+        {!isEdit && (
+          <div className={styles.importRow}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".skill,.zip,application/zip"
+              className={styles.fileInputHidden}
+              onChange={handleFileChange}
+            />
+            <button
+              type="button"
+              className={styles.importBtn}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing || submitting}
+            >
+              {importing ? 'Importing…' : '↑ Import from .skill file'}
+            </button>
+            <span className={styles.importHint}>or fill in manually below</span>
+          </div>
+        )}
 
         {importNotice && <div className={styles.notice}>{importNotice}</div>}
 
@@ -256,7 +251,7 @@ export default function SubmitSkillForm({ onClose, onSubmit, submitting, getToke
               Cancel
             </button>
             <button type="submit" className={styles.btnSubmit} disabled={submitting || uploading || importing}>
-              {uploading ? 'Uploading assets…' : submitting ? 'Adding…' : 'Add skill'}
+              {uploading ? 'Uploading assets…' : submitting ? (isEdit ? 'Saving…' : 'Adding…') : (isEdit ? 'Save changes' : 'Add skill')}
             </button>
           </div>
         </form>
