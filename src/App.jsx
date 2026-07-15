@@ -217,8 +217,8 @@ export default function App() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <button className={styles.helpBtn} onClick={() => setShowHelp(true)} aria-label="Help">
-              ?
+            <button className={styles.helpBtn} onClick={() => setShowHelp(true)}>
+              How to use me
             </button>
             <button className={styles.addBtn} onClick={() => setShowSubmitForm(true)}>
               + Add skill
