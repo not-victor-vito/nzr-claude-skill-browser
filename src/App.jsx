@@ -4,6 +4,7 @@ import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import SkillCard from './components/SkillCard.jsx'
 import SkillModal from './components/SkillModal.jsx'
 import SubmitSkillForm from './components/SubmitSkillForm.jsx'
+import HelpModal from './components/HelpModal.jsx'
 import { apiScope } from './authConfig.js'
 import styles from './App.module.css'
 
@@ -19,6 +20,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedSkill, setSelectedSkill] = useState(null)
   const [showSubmitForm, setShowSubmitForm] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   const [editingSkill, setEditingSkill] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState(null)
@@ -215,6 +217,9 @@ export default function App() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+            <button className={styles.helpBtn} onClick={() => setShowHelp(true)} aria-label="Help">
+              ?
+            </button>
             <button className={styles.addBtn} onClick={() => setShowSubmitForm(true)}>
               + Add skill
             </button>
@@ -284,6 +289,8 @@ export default function App() {
       )}
 
       {toast && <div className={styles.toast}>{toast}</div>}
+
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
       {showSubmitForm && (
         <SubmitSkillForm
